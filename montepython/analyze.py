@@ -124,6 +124,7 @@ def analyze(command_line):
                                  info.best_fit_path)
 
     if not command_line.minimal:
+        output_chains(information_instances)
         # Computing 1,2 and 3-sigma errors, and plot. This will create the
         # triangle and 1d plot by default.
         compute_posterior(information_instances)
@@ -132,9 +133,160 @@ def analyze(command_line):
         for info in information_instances:
             info.write_information_files()
 
+
     # when called by MCMC in update mode, return R values so that they can be written for information in the chains
     if command_line.update:
         return info.R
+
+def output_chains(information_instances):
+
+    matplotlib.rc('text', usetex=True)
+    matplotlib.rc('font', size=11)
+    matplotlib.rc('xtick', labelsize='15')
+    matplotlib.rc('ytick', labelsize='15')
+    plt.figure(figsize=(10,8))
+    plt.axis([0,2,0,200])
+    plt.ylabel(r'$H\,[\mathrm{km/s/Mpc}]$',fontsize=18)
+    plt.xlabel(r'$z$',fontsize=20)
+
+    conf = information_instances[0]
+    print conf.legendnames
+    plot_list = ['H_0','H1','H2','H3','H4','H5','H6','H7','H8','H9','H10','H11','H12','H13','H14','H15','H16','H17','H18','H19','H20']
+    z=0
+    dz=0.25
+    Hvalues=[]
+    initial =0
+    final = 0
+    for info in information_instances:
+        # Hvalues=np.zeros(len(info.chain[:2,0]))
+        info.output_file_chains = os.path.join(info.folder, info.basename+'.output_file_chains')
+        chain_file = open(info.output_file_chains, 'w')
+        # with open(info.output_file_chains, 'w') as chain_file:
+        # print info.ref_names[1:10]
+        hist_Likelihood,edges = np.histogram(info.chain[:,1],bins=20)
+        # bin=np.linspace
+        # plt.plot(edges[:20],hist_Likelihood)
+        cum_hist_likelihood = np.cumsum(hist_Likelihood)*1./np.sum(hist_Likelihood)
+        alvl = np.searchsorted(cum_hist_likelihood, info.levels[:2])
+        lkl_68 = edges[alvl[0]]
+        lkl_95 = edges[alvl[1]]
+        index_list=[]
+        print alvl, lkl_68,lkl_95
+        for elem in plot_list:
+            if elem in info.ref_names:
+                print info.ref_names.index(elem)+2,
+                index_list.append(info.ref_names.index(elem)+2)
+                #   if initial == 0:
+                #       chain_file.write('# {0}'.format(info.ref_names))
+                #       initial = info.ref_names.index(elem)+2
+                #       final = initial
+                #   chain_file.write('{0}'.format(info.ref_names))
+                #   final+=1
+        print info.ref_names
+                #   Hvalues.append((info.chain[:, info.ref_names.index(elem)+2]))
+        chain_file.write('\n')
+        Hvalues=[]
+        Hvalues_bestfit = info.chain[:, index_list][info.chain[:, 1]<edges.min()+0.01]
+        # Hvalues_bestfit = info.chain[:, [initial-3,initial,initial+1,initial+2,initial+3,initial+4,initial+5,initial+6,initial+7,initial+8,initial+9,initial+10,initial+11,initial+12,initial+13,initial+14,initial+15,initial+16,initial+17,initial+18,initial+19]][info.chain[:, 1]<edges.min()+0.1]
+        # Hvalues = info.chain[:, [initial-3,initial,initial+1,initial+2,initial+3,initial+4,initial+5,initial+6,initial+7,initial+8,initial+9,initial+10,initial+11,initial+12,initial+13,initial+14,initial+15,initial+16,initial+17,initial+18,initial+19]]
+        # print Hvalues_bestfit[:,2]
+        # j=0
+        # for H_of_z in Hvalues:
+        #         d_square =0
+        #         i = 0
+        #         for elem in H_of_z:
+        #             # print elem, Hvalues_bestfit[:,i]
+        #             d_square += (elem-Hvalues_bestfit[:,i])**2
+        #             i+=1
+        #             # print "dsqure", d_square
+        #         np.concatenate((Hvalues[j],d_square))
+        #         print Hvalues[j], d_square
+        #         j+=1
+        # print Hvalues.shape
+        Hvalues_95 = info.chain[:, index_list][(info.chain[:, 1]>lkl_68)*(info.chain[:, 1]<lkl_95)]
+        Hvalues_68 = info.chain[:, index_list][info.chain[:, 1]<lkl_68]
+        # Hvalues_95 = info.chain[:, [initial-3,initial,initial+1,initial+2,initial+3,initial+4,initial+5,initial+6,initial+7,initial+8,initial+9,initial+10,initial+11,initial+12,initial+13,initial+14,initial+15,initial+16,initial+17,initial+18,initial+19]][(info.chain[:, 1]>lkl_68)*(info.chain[:, 1]<lkl_95)]
+        # Hvalues_68 = info.chain[:, [initial-3,initial,initial+1,initial+2,initial+3,initial+4,initial+5,initial+6,initial+7,initial+8,initial+9,initial+10,initial+11,initial+12,initial+13,initial+14,initial+15,initial+16,initial+17,initial+18,initial+19]][info.chain[:, 1]<lkl_68]
+        # Hvalues_95 = info.chain[:, initial-1:final][info.chain[:, 1]<lkl_95]
+
+        # print Hvalues_68, Hvalues_95
+        # Hvalues_95 = Hvalues_95[Hvalues_95>]
+        print Hvalues_68.shape, Hvalues_95.shape
+        zarray = np.linspace(0.,5,21)
+        zarray2 = np.linspace(0.,5,200)
+        # legends[inf]
+        try:
+            from scipy.interpolate import interp1d
+            Information.has_interpolate_module = True
+        except ImportError:
+            Information.has_interpolate_module = False
+            warnings.warn(
+                'No cubic interpolation done (no interpolate method found ' +
+                'in scipy), only linear')
+        for H_of_z in Hvalues_68[:500]:
+            line=interp1d(zarray,H_of_z,kind='cubic')
+            plot_68 = plt.plot(zarray2,line(zarray2),color = info.MP_color_cycle[info.id][1],
+            # the [1] picks up the color of the 68% contours
+            # with [0] you would get that of the 95% contours
+            alpha = info.alphas[info.id],lw=0.5)
+        for H_of_z in Hvalues_95[:500]:
+            line=interp1d(zarray,H_of_z,kind='cubic')
+            plot_95 = plt.plot(zarray2,line(zarray2),color = info.MP_color_cycle[info.id][0],
+            # the [1] picks up the color of the 68% contours
+            # with [0] you would get that of the 95% contours
+            alpha = info.alphas[info.id],lw=0.5)
+            line=interp1d(zarray,Hvalues_bestfit[0,:],kind='cubic')
+            plot_bestfit = plt.plot(zarray2,line(zarray2),color = info.MP_color_cycle[info.id][1],lw=0.5)
+        plt.fill_between(zarray,71.5+np.zeros(len(zarray)),74.98+np.zeros(len(zarray)),facecolor='blue',alpha=0.3)
+
+    legends = [None for _ in range(len(information_instances))]
+    print plot_68[0]
+    legends[info.id] = plot_68[0]
+    if not conf.legendnames:
+        legend_names = [info.basename.replace('_', ' ')
+                        for info in information_instances]
+    else:
+        legend_names = conf.legendnames
+    try:
+        plt.legend(legends, legend_names,
+                     loc='upper left',
+                     borderaxespad=0.,
+                     fontsize=info.legendsize)
+    except TypeError:
+        plt.legend(legends, legend_names,
+                     loc='upper left',
+                     borderaxespad=0.,
+                     prop={'fontsize': info.legendsize})
+    print legends, legend_names
+
+        # Hvalues=Hvalues.T
+        # print Hvalues.shape
+        # np.savetxt(chain_file,Hvalues[:1000])
+
+#         for elem in plot_list:
+#             if elem in info.ref_names:
+#                 y_68 = info.chain[:, info.ref_names.index(elem)+2][info.chain[:, 1]<lkl_68]
+#                 y_95 = info.chain[:, info.ref_names.index(elem)+2][info.chain[:, 1]<lkl_95]
+#                 plot_test = plt.plot(z+np.zeros(len(y_68)),y_68,'r')
+#                 plot_test = plt.plot(z+np.zeros(len(y_95)),y_95,'b')
+# #             # plot_test = plt.plot(z+np.zeros(len(info.chain[:, info.ref_names.index(elem)+2])),info.chain[:, info.ref_names.index(elem)+2])
+# #         # plot_test = plt.contourf(z+np.zeros(len(info.chain[:, info.ref_names.index(elem)+2])),info.chain[:, info.ref_names.index(elem)+2],levels=ctr_level(info.chain[:, info.ref_names.index(elem)+2], [0.68, 0.95]))
+#                 z+=dz
+#         #
+        # plt.show()
+    print '-----------------------------------------------'
+    if conf.plot:
+        print '--> Saving figures to .{0} files'.format(info.extension)
+        plot_name = '-vs-'.join([os.path.split(elem.folder)[-1]
+                                for elem in information_instances])
+    plt.tight_layout()
+    plt.savefig(
+        os.path.join(
+            conf.folder, 'plots', '{0}_Hubble.{1}'.format(
+                plot_name, info.extension)),
+        bbox_inches='tight')
+    chain_file.close()
+    exit()
 
 def prepare(files, info):
     """
@@ -794,7 +946,6 @@ def compute_posterior(information_instances):
                                     zorder=4,
                                     colors = info.MP_color_cycle[info.id],
                                     alpha=info.alphas[info.id])
-
                                 # now add a thin darker line
                                 # around the 95% contour
                                 ax2dsub.contour(
@@ -954,14 +1105,18 @@ def ctr_level(histogram2d, lvl, infinite=False):
     Extract the contours for the 2d plots (Karim Benabed)
 
     """
-
+    # print "original", histogram2d
     hist = histogram2d.flatten()*1.
     hist.sort()
+    # print "sorted", hist
     cum_hist = np.cumsum(hist[::-1])
+    # print "cumsum", cum_hist
     cum_hist /= cum_hist[-1]
-
+    # print "normed", cum_hist
     alvl = np.searchsorted(cum_hist, lvl)[::-1]
+    # print "alvl", alvl
     clist = [0]+[hist[-i] for i in alvl]+[hist.max()]
+    # print "clist", clist
     if not infinite:
         return clist[1:]
     return clist
